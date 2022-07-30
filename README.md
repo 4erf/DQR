@@ -62,7 +62,7 @@ the [models](./models) folder
 This whole README is encoded in the following DQR code.
 
 <p align="center">
-  <img src="images/readme.png" alt="Logo" width="258" style="image-rendering: pixelated">
+  <img src="images/readme.png" alt="Logo">
 </p>
 
 And decoding it yields the same text back, as expected.
