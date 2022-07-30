@@ -3,7 +3,7 @@ from torch import nn
 
 
 class DeConv2d(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: (int, int)):
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: (int, int), hidden_size: int):
         super(DeConv2d, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -11,12 +11,12 @@ class DeConv2d(nn.Module):
 
         oC, iC, (kH, kW) = self.out_channels, self.in_channels, self.kernel_size
         self.inverse_kernels = nn.ModuleList([nn.Sequential(
-            nn.Linear(1, 2 ** (kH * kW)),
+            nn.Linear(iC, hidden_size),
             nn.ReLU(),
-            nn.Linear(2 ** (kH * kW), 2 ** (kH * kW)),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(2 ** (kH * kW), kH * kW),
-        ) for _ in range(oC * iC)])
+            nn.Linear(hidden_size, kH * kW),
+        ) for _ in range(oC)])
 
     def forward(self, batches):
         n, _, iH, iW = batches.size()
@@ -24,28 +24,20 @@ class DeConv2d(nn.Module):
         oH, oW = kH * iH, kW * iW
 
         # shape: (n, iC, iH, iW)
-        in_channels = batches.transpose(0, 1)
-        # shape: (iC, n, iH, iW)
+        in_channels = batches.transpose(1, 2).transpose(2, 3)
+        # shape: (n, iH, iW, iC)
 
         out_channels = []  # shape: [oC](n, oH, oW)
         for i in range(oC):
-            outputs = []  # shape: [iC](n, oH, oW)
-            for j, channel in enumerate(in_channels):
-                # shape: (n, iH, iW)
-                linear_in = channel.view(-1, 1)
-                # shape: (n * iH * iW, 1)
-                linear_out = self.inverse_kernels[i * oC + j](linear_in)
-                # shape: (n * iH * iW, kH * kW)
-                out_squared = linear_out.view(-1, kH, kW)
-                # shape: (n * iH * iW, kH, kW)
-                aligned = out_squared.view(-1, iH, iW, kH, kW)
-                # shape: (n, iH, iW, kH, kW)
-                output = aligned.transpose(2, 3).reshape(-1, oH, oW)
-                # shape: (n, oH, oW)
-                outputs.append(output)
-
-            # Aggregate outputs into a single out channel
-            out_channel = torch.sum(torch.stack(outputs), dim=0)
+            # shape: (n, iH, iW, iC)
+            linear_in = in_channels.reshape(-1, iC)
+            # shape: (n * iH * iW, iC)
+            linear_out = self.inverse_kernels[i](linear_in)
+            # shape: (n * iH * iW, kH * kW)
+            aligned = linear_out.view(n, iH, iW, kH, kW)
+            # shape: (n, iH, iW, kH, kW)
+            out_channel = aligned.transpose(2, 3).reshape(n, oH, oW)
+            # shape: (n, oH, oW)
             out_channels.append(out_channel)
 
         # Obtain final output

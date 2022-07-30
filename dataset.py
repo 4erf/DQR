@@ -31,14 +31,16 @@ class BitStringDatasetGPU(Dataset):
         self.seed = np.random.randint(0, np.iinfo(np.int64).max - self.size)
         self.device = device
         self.dim = (np.ceil(np.ceil(np.sqrt(self.len)) / dw) * dw).astype(int)
-        self.zeros = torch.zeros(self.dim ** 2 - self.len, device=self.device)
+        self.zeros = torch.zeros(self.dim ** 2 - self.len)
         self.data = []
-        self.generator = torch.Generator(device=device)
+        self.generator = torch.Generator()
         self.generator.manual_seed(self.seed)
         for _ in range(self.size):
-            string = torch.round(torch.rand(self.len, generator=self.generator, device=self.device))
+            string = torch.round(torch.rand(self.len, generator=self.generator))
             padded = torch.cat((string, self.zeros))
             self.data.append(torch.reshape(padded, (1, self.dim, self.dim)))
+        self.data = torch.stack(self.data)
+        self.data.to(device)
 
     def __getitem__(self, index: int):
         return self.data[index]

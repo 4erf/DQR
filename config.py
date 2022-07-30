@@ -1,8 +1,8 @@
 # Parameters
-batch_size = 1
+batch_size = 128
 learning_rate = 2.5e-3
-bit_string_len = 8 * 256
-train_dataset_size = 10e4
-test_dataset_size = 10e3
-epochs = 5
-downscale_factor = 2
+bit_string_len = 18 * 18
+train_dataset_size = 1e5
+test_dataset_size = 1e5
+epochs = 100
+downscale_factor = 3

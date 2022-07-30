@@ -19,15 +19,16 @@ def train(loss_func):
     )
     encoder = Encode()
     decoder = Decode()
-    optimizer = torch.optim.Adam(
-        list(encoder.parameters()) + list(decoder.parameters()),
-        lr=config.learning_rate,
-    )
 
     encoder.to(device)
     decoder.to(device)
     encoder.train()
     decoder.train()
+
+    optimizer = torch.optim.Adam(
+        list(encoder.parameters()) + list(decoder.parameters()),
+        lr=config.learning_rate,
+    )
 
     loss_list = []
 
