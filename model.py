@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import config
@@ -12,7 +13,7 @@ class Encode(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        return F.relu(x)
+        return torch.clamp(x, 0, 1)
 
 
 class Decode(nn.Module):
@@ -22,4 +23,4 @@ class Decode(nn.Module):
 
     def forward(self, x):
         x = self.deconv(x)
-        return nn.Sigmoid()(x)
+        return x

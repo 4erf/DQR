@@ -10,43 +10,48 @@ class DeConv2d(nn.Module):
         self.kernel_size = kernel_size
 
         oC, iC, (kH, kW) = self.out_channels, self.in_channels, self.kernel_size
-        self.weights = nn.init.uniform_(torch.zeros((oC, iC, kH, kW)), -1, 1)
-        self.biases = torch.zeros((oC, iC, kH, kW))
-        self.weights = nn.Parameter(self.weights.requires_grad_(True))
-        self.biases = nn.Parameter(self.biases.requires_grad_(True))
-
-    def _apply(self, fn):
-        # Auto send tensors to model device
-        super(DeConv2d, self)._apply(fn)
-        self.weights = fn(self.weights)
-        self.biases = fn(self.biases)
-        return self
-
-    def reshape_param(self, param, n, iH, iW):
-        # shape: (oC, iC, kH, kW)
-        repeated = param.repeat(1, 1, iH, iW)
-        # shape: (oC, iC, oH, oW)
-        expanded = repeated.unsqueeze(0).expand(n, -1, -1, -1, -1)
-        return expanded
+        self.inverse_kernels = nn.ModuleList([nn.Sequential(
+            nn.Linear(1, 2 ** (kH * kW)),
+            nn.ReLU(),
+            nn.Linear(2 ** (kH * kW), 2 ** (kH * kW)),
+            nn.ReLU(),
+            nn.Linear(2 ** (kH * kW), kH * kW),
+        ) for _ in range(oC * iC)])
 
     def forward(self, batches):
         n, _, iH, iW = batches.size()
         oC, iC, (kH, kW) = self.out_channels, self.in_channels, self.kernel_size
         oH, oW = kH * iH, kW * iW
 
-        # Reshape inputs
         # shape: (n, iC, iH, iW)
-        repeated = batches.repeat_interleave(kW, 3, output_size=oW).repeat_interleave(kH, 2, output_size=oH)
-        # shape: (n, iC, oH, oW)
-        expanded = repeated.unsqueeze(1).expand(-1, oC, -1, -1, -1)
-        # shape: (n, oC, iC, oH, oW)
+        in_channels = batches.transpose(0, 1)
+        # shape: (iC, n, iH, iW)
 
-        # Reshape weights & biases
-        weights = self.reshape_param(self.weights, n, iH, iW)
-        biases = self.reshape_param(self.biases, n, iH, iW)
+        out_channels = []  # shape: [oC](n, oH, oW)
+        for i in range(oC):
+            outputs = []  # shape: [iC](n, oH, oW)
+            for j, channel in enumerate(in_channels):
+                # shape: (n, iH, iW)
+                linear_in = channel.view(-1, 1)
+                # shape: (n * iH * iW, 1)
+                linear_out = self.inverse_kernels[i * oC + j](linear_in)
+                # shape: (n * iH * iW, kH * kW)
+                out_squared = linear_out.view(-1, kH, kW)
+                # shape: (n * iH * iW, kH, kW)
+                aligned = out_squared.view(-1, iH, iW, kH, kW)
+                # shape: (n, iH, iW, kH, kW)
+                output = aligned.transpose(2, 3).reshape(-1, oH, oW)
+                # shape: (n, oH, oW)
+                outputs.append(output)
 
-        # Apply deconvolution
-        result = expanded * weights + biases
-        summed = result.sum(2)
+            # Aggregate outputs into a single out channel
+            out_channel = torch.sum(torch.stack(outputs), dim=0)
+            out_channels.append(out_channel)
 
-        return summed
+        # Obtain final output
+        result = torch.stack(out_channels)
+        # shape: (oC, n, oH, oW)
+        result = result.transpose(0, 1)
+        # shape: (n, oC, oH, oW)
+
+        return result

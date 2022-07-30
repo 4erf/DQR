@@ -66,6 +66,7 @@ def train(loss_func):
 
     return encoder, decoder
 
+
 def test(encoder, decoder, loss_func):
     test_dataset = BitStringDatasetGPU(config.bit_string_len, config.test_dataset_size, device)
     test_loader = DataLoader(
