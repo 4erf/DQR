@@ -1,0 +1,6 @@
+% Virtual environment
+.venv
+.python-version
+
+% PyCharm
+.idea
